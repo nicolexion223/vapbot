@@ -17,7 +17,8 @@ from database import (
     confirmar_pedido, get_pedido, confirmar_pedido_mayorista,
     ventas_hoy, ventas_periodo, stats_por_vendedor,
     get_config, set_config, init_db,
-    aprobar_cliente, bloquear_cliente, get_clientes_aprobados,
+    aprobar_cliente, bloquear_cliente, desbanear_cliente,
+    get_clientes_aprobados, get_clientes_baneados,
     get_solicitud, eliminar_solicitud,
     registrar_venta_mayorista_manual,
     rechazar_pedido, añadir_stock
@@ -53,7 +54,8 @@ VENDEDORES_PERMITIDOS = {
     VENTA_MAYOR_MANUAL,
     STOCK_AÑADIR_SABOR,
     STOCK_AÑADIR_CANT,
-) = range(11)
+    CLIENTES_MENU,
+) = range(12)
 
 
 def get_vendedor(update: Update) -> str | None:
@@ -83,6 +85,7 @@ def _teclado_menu():
         [InlineKeyboardButton("📋 Pedidos pendientes",        callback_data="pedidos")],
         [InlineKeyboardButton("📈 Ventas de hoy",             callback_data="ventas_hoy")],
         [InlineKeyboardButton("📊 Estadísticas",              callback_data="stats")],
+        [InlineKeyboardButton("👥 Clientes",                  callback_data="clientes")],
     ])
 
 
@@ -247,6 +250,9 @@ async def menu_gestion(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return STATS_MENU
 
+    elif query.data == "clientes":
+        return await _mostrar_clientes_aprobados(query)
+
     elif query.data == "volver_menu":
         vendedor = get_vendedor(update)
         await query.edit_message_text(
@@ -255,6 +261,125 @@ async def menu_gestion(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
         return MENU_GESTION
+
+
+async def _mostrar_clientes_aprobados(query):
+    clientes = get_clientes_aprobados()
+    if not clientes:
+        texto = "👥 *Clientes aprobados*\n\nNo hay clientes registrados aún."
+        keyboard = [
+            [InlineKeyboardButton("🚫 Ver baneados", callback_data="ver_baneados")],
+            [InlineKeyboardButton("🔙 Volver", callback_data="volver_menu")],
+        ]
+    else:
+        texto = "👥 *Clientes aprobados:*\n\n"
+        keyboard = []
+        for tid, nombre, username, aprobado_por, fecha in clientes:
+            user_str = f"@{username}" if username else "sin @"
+            texto += f"• *{nombre}* ({user_str}) — ID: `{tid}`\n"
+            keyboard.append([InlineKeyboardButton(
+                f"🚫 Banear a {nombre}", callback_data=f"banear_{tid}"
+            )])
+        keyboard.append([InlineKeyboardButton("🚫 Ver baneados", callback_data="ver_baneados")])
+        keyboard.append([InlineKeyboardButton("🔙 Volver", callback_data="volver_menu")])
+
+    await query.edit_message_text(texto, parse_mode="Markdown",
+                                  reply_markup=InlineKeyboardMarkup(keyboard))
+    return CLIENTES_MENU
+
+
+async def clientes_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    vendedor = get_vendedor(update)
+
+    if query.data == "volver_menu":
+        await query.edit_message_text(
+            f"👋 Hola *{vendedor.capitalize()}*! ¿Qué quieres hacer?",
+            reply_markup=_teclado_menu(),
+            parse_mode="Markdown"
+        )
+        return MENU_GESTION
+
+    elif query.data == "clientes_aprobados":
+        return await _mostrar_clientes_aprobados(query)
+
+    elif query.data == "ver_baneados":
+        baneados = get_clientes_baneados()
+        if not baneados:
+            texto = "🚫 *Clientes baneados*\n\nNo hay ningún cliente baneado."
+            keyboard = [
+                [InlineKeyboardButton("👥 Ver aprobados", callback_data="clientes_aprobados")],
+                [InlineKeyboardButton("🔙 Volver", callback_data="volver_menu")],
+            ]
+        else:
+            texto = "🚫 *Clientes baneados:*\n\n"
+            keyboard = []
+            for tid, nombre, username, baneado_por, fecha in baneados:
+                user_str = f"@{username}" if username else "sin @"
+                texto += f"• *{nombre}* ({user_str}) — ID: `{tid}`\n"
+                keyboard.append([InlineKeyboardButton(
+                    f"✅ Desbanear a {nombre}", callback_data=f"desbanear_{tid}"
+                )])
+            keyboard.append([InlineKeyboardButton("👥 Ver aprobados", callback_data="clientes_aprobados")])
+            keyboard.append([InlineKeyboardButton("🔙 Volver", callback_data="volver_menu")])
+        await query.edit_message_text(texto, parse_mode="Markdown",
+                                      reply_markup=InlineKeyboardMarkup(keyboard))
+        return CLIENTES_MENU
+
+    elif query.data.startswith("banear_"):
+        telegram_id = int(query.data.replace("banear_", ""))
+        ok = bloquear_cliente(telegram_id, vendedor)
+        if ok:
+            try:
+                from telegram import Bot
+                bc = Bot(token=os.getenv("TOKEN_BOT_CLIENTES"))
+                await bc.send_message(
+                    chat_id=telegram_id,
+                    text="🚫 Tu acceso ha sido revocado. Contacta con el vendedor si crees que es un error."
+                )
+            except Exception:
+                pass
+            await query.answer("🚫 Cliente baneado", show_alert=True)
+        return await _mostrar_clientes_aprobados(query)
+
+    elif query.data.startswith("desbanear_"):
+        telegram_id = int(query.data.replace("desbanear_", ""))
+        ok = desbanear_cliente(telegram_id)
+        if ok:
+            try:
+                from telegram import Bot
+                bc = Bot(token=os.getenv("TOKEN_BOT_CLIENTES"))
+                await bc.send_message(
+                    chat_id=telegram_id,
+                    text="✅ Tu acceso ha sido restaurado. Escribe *vapers* para continuar.",
+                    parse_mode="Markdown"
+                )
+            except Exception:
+                pass
+            await query.answer("✅ Cliente desbaneado", show_alert=True)
+        # Volver a la lista de baneados
+        baneados = get_clientes_baneados()
+        if not baneados:
+            texto = "🚫 *Clientes baneados*\n\nNo hay ningún cliente baneado."
+            keyboard = [
+                [InlineKeyboardButton("👥 Ver aprobados", callback_data="clientes_aprobados")],
+                [InlineKeyboardButton("🔙 Volver", callback_data="volver_menu")],
+            ]
+        else:
+            texto = "🚫 *Clientes baneados:*\n\n"
+            keyboard = []
+            for tid, nombre, username, baneado_por, fecha in baneados:
+                user_str = f"@{username}" if username else "sin @"
+                texto += f"• *{nombre}* ({user_str}) — ID: `{tid}`\n"
+                keyboard.append([InlineKeyboardButton(
+                    f"✅ Desbanear a {nombre}", callback_data=f"desbanear_{tid}"
+                )])
+            keyboard.append([InlineKeyboardButton("👥 Ver aprobados", callback_data="clientes_aprobados")])
+            keyboard.append([InlineKeyboardButton("🔙 Volver", callback_data="volver_menu")])
+        await query.edit_message_text(texto, parse_mode="Markdown",
+                                      reply_markup=InlineKeyboardMarkup(keyboard))
+        return CLIENTES_MENU
 
 
 # ─── VENTA: ELEGIR SABOR ──────────────────────────────────────────────────────
@@ -1019,6 +1144,7 @@ def main():
             VENTA_MAYOR_MANUAL:  [CallbackQueryHandler(venta_mayorista_manual)],
             STOCK_AÑADIR_SABOR:  [CallbackQueryHandler(stock_añadir_sabor)],
             STOCK_AÑADIR_CANT:   [CallbackQueryHandler(stock_añadir_cant)],
+            CLIENTES_MENU:       [CallbackQueryHandler(clientes_menu)],
         },
         fallbacks=[CommandHandler("cancelar", cancelar)],
         allow_reentry=True,

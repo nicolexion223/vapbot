@@ -66,6 +66,15 @@ def init_db():
 
     if USE_POSTGRES:
         c.execute("""
+            CREATE TABLE IF NOT EXISTS clientes_baneados (
+                telegram_id BIGINT PRIMARY KEY,
+                nombre TEXT,
+                username TEXT,
+                baneado_por TEXT,
+                fecha_ban TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        c.execute("""
             CREATE TABLE IF NOT EXISTS config (
                 clave TEXT PRIMARY KEY,
                 valor TEXT
@@ -131,6 +140,15 @@ def init_db():
             )
         """)
     else:
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS clientes_baneados (
+                telegram_id INTEGER PRIMARY KEY,
+                nombre TEXT,
+                username TEXT,
+                baneado_por TEXT,
+                fecha_ban TEXT DEFAULT (datetime('now'))
+            )
+        """)
         c.execute("""
             CREATE TABLE IF NOT EXISTS config (
                 clave TEXT PRIMARY KEY,
@@ -590,14 +608,59 @@ def aprobar_cliente(telegram_id: int, nombre: str, username: str, aprobado_por: 
     return insertado
 
 
-def bloquear_cliente(telegram_id: int) -> bool:
+def bloquear_cliente(telegram_id: int, baneado_por: str = "") -> bool:
     conn = get_conn()
     c = conn.cursor()
+    c.execute(_q("SELECT nombre, username FROM clientes_aprobados WHERE telegram_id=%s"), (telegram_id,))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return False
+    nombre, username = row
+    if USE_POSTGRES:
+        c.execute("""
+            INSERT INTO clientes_baneados (telegram_id, nombre, username, baneado_por)
+            VALUES (%s, %s, %s, %s) ON CONFLICT (telegram_id) DO NOTHING
+        """, (telegram_id, nombre, username, baneado_por))
+    else:
+        c.execute("INSERT OR IGNORE INTO clientes_baneados (telegram_id, nombre, username, baneado_por) VALUES (?,?,?,?)",
+                  (telegram_id, nombre, username, baneado_por))
     c.execute(_q("DELETE FROM clientes_aprobados WHERE telegram_id=%s"), (telegram_id,))
     conn.commit()
-    eliminado = c.rowcount > 0
     conn.close()
-    return eliminado
+    return True
+
+
+def desbanear_cliente(telegram_id: int) -> bool:
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute(_q("SELECT nombre, username FROM clientes_baneados WHERE telegram_id=%s"), (telegram_id,))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return False
+    nombre, username = row
+    if USE_POSTGRES:
+        c.execute("""
+            INSERT INTO clientes_aprobados (telegram_id, nombre, username, aprobado_por)
+            VALUES (%s, %s, %s, 'desban') ON CONFLICT (telegram_id) DO NOTHING
+        """, (telegram_id, nombre, username))
+    else:
+        c.execute("INSERT OR IGNORE INTO clientes_aprobados (telegram_id, nombre, username, aprobado_por) VALUES (?,?,?,'desban')",
+                  (telegram_id, nombre, username))
+    c.execute(_q("DELETE FROM clientes_baneados WHERE telegram_id=%s"), (telegram_id,))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def get_clientes_baneados():
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT telegram_id, nombre, username, baneado_por, fecha_ban FROM clientes_baneados ORDER BY fecha_ban DESC")
+    rows = c.fetchall()
+    conn.close()
+    return rows
 
 
 def rechazar_pedido(pedido_id: int) -> bool:
