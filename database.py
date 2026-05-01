@@ -510,7 +510,9 @@ def ventas_periodo(vendedor=None, periodo='hoy'):
     conn = get_conn()
     c = conn.cursor()
     now = datetime.now()
-    if periodo == 'semana':
+    if periodo == 'total':
+        date_cond, date_params = "1=1", []
+    elif periodo == 'semana':
         start = (now - timedelta(days=now.weekday())).strftime("%Y-%m-%d")
         date_cond = _q("fecha >= %s")
         date_params = [start]
@@ -542,7 +544,9 @@ def stats_por_vendedor(periodo='hoy'):
     conn = get_conn()
     c = conn.cursor()
     now = datetime.now()
-    if periodo == 'semana':
+    if periodo == 'total':
+        date_cond, date_params = "1=1", []
+    elif periodo == 'semana':
         start = (now - timedelta(days=now.weekday())).strftime("%Y-%m-%d")
         date_cond = _q("fecha >= %s")
         date_params = [start]

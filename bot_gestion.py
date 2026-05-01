@@ -238,10 +238,11 @@ async def menu_gestion(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif query.data == "stats":
         keyboard = [
-            [InlineKeyboardButton("📅 Hoy", callback_data="stats_hoy")],
-            [InlineKeyboardButton("📆 Esta semana", callback_data="stats_semana")],
-            [InlineKeyboardButton("🗓️ Este mes", callback_data="stats_mes")],
-            [InlineKeyboardButton("🔙 Volver", callback_data="volver_menu")],
+            [InlineKeyboardButton("📅 Hoy",         callback_data="stats_hoy")],
+            [InlineKeyboardButton("📆 Esta semana",  callback_data="stats_semana")],
+            [InlineKeyboardButton("🗓️ Este mes",     callback_data="stats_mes")],
+            [InlineKeyboardButton("🏆 Total",        callback_data="stats_total")],
+            [InlineKeyboardButton("🔙 Volver",       callback_data="volver_menu")],
         ]
         await query.edit_message_text(
             "📊 *Estadísticas — ¿Qué período?*",
@@ -614,8 +615,8 @@ async def stats_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return MENU_GESTION
 
-    periodo = query.data.replace("stats_", "")  # 'hoy', 'semana', 'mes'
-    titulos = {'hoy': 'Hoy', 'semana': 'Esta semana', 'mes': 'Este mes'}
+    periodo = query.data.replace("stats_", "")
+    titulos = {'hoy': 'Hoy', 'semana': 'Esta semana', 'mes': 'Este mes', 'total': 'Total histórico'}
     titulo = titulos.get(periodo, periodo)
 
     mis_ventas = ventas_periodo(vendedor, periodo)
@@ -634,28 +635,34 @@ async def stats_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         texto += "  Sin ventas en este período\n\n"
 
-    if top_sabores:
-        texto += "🏆 *Top sabores (tienda):*\n"
-        for i, (sabor, cant, _) in enumerate(top_sabores, 1):
-            texto += f"  {i}. {sabor} — {cant} uds\n"
+    medallas = ["🥇", "🥈", "🥉"]
+    todos_sabores = ventas_periodo(None, periodo)
+
+    if todos_sabores:
+        texto += "🏆 *Ranking sabores (tienda):*\n"
+        for i, (sabor, cant, _) in enumerate(todos_sabores[:10], 1):
+            medal = medallas[i - 1] if i <= 3 else f"  {i}."
+            texto += f"{medal} {sabor} — {cant} uds\n"
         texto += "\n"
 
     if por_vendedor:
-        texto += "💼 *Ingresos por vendedor:*\n"
+        texto += "💼 *Ranking vendedores:*\n"
         total_uds = total_euros = 0
-        for vend, cant, precio in por_vendedor:
-            texto += f"  • {vend.capitalize()}: {cant} uds → {precio}€\n"
+        for i, (vend, cant, precio) in enumerate(por_vendedor, 1):
+            medal = medallas[i - 1] if i <= 3 else f"  {i}."
+            texto += f"{medal} {vend.capitalize()}: {cant} uds → {precio}€\n"
             total_uds += cant or 0
             total_euros += precio or 0
-        texto += f"  💰 *Total tienda: {total_uds} uds → {total_euros}€*"
+        texto += f"\n  💰 *Total tienda: {total_uds} uds → {total_euros}€*"
     else:
         texto += "Sin ventas registradas en la tienda."
 
     keyboard = [
         [
-            InlineKeyboardButton("📅 Hoy", callback_data="stats_hoy"),
+            InlineKeyboardButton("📅 Hoy",    callback_data="stats_hoy"),
             InlineKeyboardButton("📆 Semana", callback_data="stats_semana"),
-            InlineKeyboardButton("🗓️ Mes", callback_data="stats_mes"),
+            InlineKeyboardButton("🗓️ Mes",   callback_data="stats_mes"),
+            InlineKeyboardButton("🏆 Total",  callback_data="stats_total"),
         ],
         [InlineKeyboardButton("🔙 Volver", callback_data="volver_menu")],
     ]
