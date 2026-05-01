@@ -69,7 +69,8 @@ bot_gestion = Bot(token=TOKEN_GESTION)
     CONFIRMAR_PEDIDO,
     CARRITO,
     ELEGIR_CANTIDAD_CARRITO,
-) = range(12)
+    PEDIR_TELEFONO,
+) = range(13)
 
 
 # ─── FOTOS POR SABOR (URLs de imágenes reales del VAP SOLO 15K) ───────────────
@@ -241,35 +242,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 "⏳ Tu solicitud ya está en revisión. Te avisaremos cuando un vendedor te apruebe."
             )
+            return ConversationHandler.END
         else:
-            registrar_solicitud(user.id, user.full_name, user.username or "")
             await update.message.reply_text(
                 "👋 ¡Hola! Para acceder al bot necesitas ser aprobado por un vendedor.\n\n"
-                "⏳ Tu solicitud ha sido enviada. Te avisaremos en cuanto te aprueben."
+                "📱 *Escribe tu número de teléfono móvil* para enviar la solicitud:",
+                parse_mode="Markdown"
             )
-            nombre_display = user.full_name + (f" (@{user.username})" if user.username else "")
-            mensaje = (
-                f"🔔 *Nueva solicitud de acceso*\n\n"
-                f"👤 *{nombre_display}*\n"
-                f"📞 ID: `{user.id}`\n\n"
-                f"¿Apruebas o rechazas el acceso?"
-            )
-            teclado_aprobacion = InlineKeyboardMarkup([[
-                InlineKeyboardButton("✅ Aprobar", callback_data=f"aprc_{user.id}"),
-                InlineKeyboardButton("❌ Rechazar", callback_data=f"rchz_{user.id}"),
-            ]])
-            for nombre_v, tid_v in VENDEDORES_IDS.items():
-                if tid_v:
-                    try:
-                        await bot_gestion.send_message(
-                            chat_id=tid_v,
-                            text=mensaje,
-                            parse_mode="Markdown",
-                            reply_markup=teclado_aprobacion
-                        )
-                    except Exception as e:
-                        logger.error(f"Error notificando a {nombre_v}: {e}")
-        return ConversationHandler.END
+            return PEDIR_TELEFONO
 
     keyboard = [
         [InlineKeyboardButton("🛒 Hacer un pedido", callback_data="pedir")],
@@ -284,6 +264,49 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
     return MENU_PRINCIPAL
+
+
+async def pedir_telefono(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    telefono = update.message.text.strip()
+
+    digitos = ''.join(c for c in telefono if c.isdigit())
+    if len(digitos) < 9:
+        await update.message.reply_text(
+            "❌ Número no válido. Por favor escribe tu número de móvil (mínimo 9 dígitos):"
+        )
+        return PEDIR_TELEFONO
+
+    registrar_solicitud(user.id, user.full_name, user.username or "", telefono)
+    await update.message.reply_text(
+        "⏳ Tu solicitud ha sido enviada. Te avisaremos en cuanto un vendedor te apruebe."
+    )
+
+    nombre_display = user.full_name + (f" (@{user.username})" if user.username else "")
+    mensaje = (
+        f"🔔 *Nueva solicitud de acceso*\n\n"
+        f"👤 *{nombre_display}*\n"
+        f"📱 Teléfono: *{telefono}*\n"
+        f"🆔 ID Telegram: `{user.id}`\n\n"
+        f"¿Apruebas o rechazas el acceso?"
+    )
+    teclado_aprobacion = InlineKeyboardMarkup([[
+        InlineKeyboardButton("✅ Aprobar", callback_data=f"aprc_{user.id}"),
+        InlineKeyboardButton("❌ Rechazar", callback_data=f"rchz_{user.id}"),
+    ]])
+    for nombre_v, tid_v in VENDEDORES_IDS.items():
+        if tid_v:
+            try:
+                await bot_gestion.send_message(
+                    chat_id=tid_v,
+                    text=mensaje,
+                    parse_mode="Markdown",
+                    reply_markup=teclado_aprobacion
+                )
+            except Exception as e:
+                logger.error(f"Error notificando a {nombre_v}: {e}")
+
+    return ConversationHandler.END
 
 
 async def menu_principal(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -740,6 +763,7 @@ def main():
             ELEGIR_FECHA:            [CallbackQueryHandler(elegir_fecha)],
             ELEGIR_HORA:             [CallbackQueryHandler(elegir_hora)],
             CONFIRMAR_PEDIDO:        [CallbackQueryHandler(confirmar_pedido_handler)],
+            PEDIR_TELEFONO:          [MessageHandler(filters.TEXT & ~filters.COMMAND, pedir_telefono)],
         },
         fallbacks=[CommandHandler("cancelar", cancelar)],
         allow_reentry=True,

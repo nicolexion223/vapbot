@@ -136,6 +136,7 @@ def init_db():
                 telegram_id BIGINT PRIMARY KEY,
                 nombre TEXT,
                 username TEXT,
+                telefono TEXT,
                 fecha TIMESTAMP DEFAULT NOW()
             )
         """)
@@ -210,6 +211,7 @@ def init_db():
                 telegram_id INTEGER PRIMARY KEY,
                 nombre TEXT,
                 username TEXT,
+                telefono TEXT,
                 fecha TEXT DEFAULT (datetime('now'))
             )
         """)
@@ -696,18 +698,18 @@ def get_clientes_aprobados():
 
 # ─── SOLICITUDES DE ACCESO ───────────────────────────────────────────────────
 
-def registrar_solicitud(telegram_id: int, nombre: str, username: str):
+def registrar_solicitud(telegram_id: int, nombre: str, username: str, telefono: str = ""):
     conn = get_conn()
     c = conn.cursor()
     if USE_POSTGRES:
         c.execute("""
-            INSERT INTO solicitudes_acceso (telegram_id, nombre, username)
-            VALUES (%s, %s, %s)
-            ON CONFLICT (telegram_id) DO UPDATE SET nombre=EXCLUDED.nombre, username=EXCLUDED.username
-        """, (telegram_id, nombre, username))
+            INSERT INTO solicitudes_acceso (telegram_id, nombre, username, telefono)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (telegram_id) DO UPDATE SET nombre=EXCLUDED.nombre, username=EXCLUDED.username, telefono=EXCLUDED.telefono
+        """, (telegram_id, nombre, username, telefono))
     else:
-        c.execute("INSERT OR REPLACE INTO solicitudes_acceso (telegram_id, nombre, username) VALUES (?, ?, ?)",
-                  (telegram_id, nombre, username))
+        c.execute("INSERT OR REPLACE INTO solicitudes_acceso (telegram_id, nombre, username, telefono) VALUES (?, ?, ?, ?)",
+                  (telegram_id, nombre, username, telefono))
     conn.commit()
     conn.close()
 
@@ -715,7 +717,7 @@ def registrar_solicitud(telegram_id: int, nombre: str, username: str):
 def get_solicitud(telegram_id: int):
     conn = get_conn()
     c = conn.cursor()
-    c.execute(_q("SELECT telegram_id, nombre, username, fecha FROM solicitudes_acceso WHERE telegram_id=%s"),
+    c.execute(_q("SELECT telegram_id, nombre, username, telefono, fecha FROM solicitudes_acceso WHERE telegram_id=%s"),
               (telegram_id,))
     row = c.fetchone()
     conn.close()
