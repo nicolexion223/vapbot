@@ -1157,8 +1157,8 @@ def main():
         allow_reentry=True,
     )
 
+    app.add_handler(CallbackQueryHandler(callback_aprobacion, pattern=r"^(aprc|rchz)_\d+$"), group=-1)
     app.add_handler(conv)
-    app.add_handler(CallbackQueryHandler(callback_aprobacion, pattern=r"^(aprc|rchz)_\d+$"))
     app.add_handler(CommandHandler("aprobar",  cmd_aprobar))
     app.add_handler(CommandHandler("bloquear", cmd_bloquear))
     app.add_handler(CommandHandler("clientes", cmd_clientes))
