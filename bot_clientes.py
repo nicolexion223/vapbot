@@ -332,7 +332,7 @@ async def menu_principal(update: Update, context: ContextTypes.DEFAULT_TYPE):
             emoji = EMOJIS_SABORES.get(sabor, "🌿")
             estado = "✅ Disponible" if stock > 0 else "❌ Agotado"
             stock_texto += f"{emoji} *{sabor}*\n   {estado} ({stock} uds)\n\n"
-        stock_texto += "\n💰 *Precios:*\n1u = 12€ | 2u = 20€ | 3u = 32€ | 4u = 40€\n📦 Caja 10u mezcladas = 80€"
+        stock_texto += "\n💰 *Precios:*\n1u = 10€ | 2u = 20€ | 3u = 30€ | 4u = 40€\n📦 Caja 10u mezcladas = 80€"
         await query.edit_message_text(
             stock_texto,
             parse_mode="Markdown",
@@ -432,7 +432,7 @@ async def elegir_sabor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(
         f"{emoji} *{sabor}*\n📦 Stock: {stock} uds\n\n"
         f"¿Cuántas unidades quieres añadir al carrito?\n\n"
-        f"💰 1u=12€ | 2u=20€ | 3u=32€ | 4u=40€",
+        f"💰 1u=10€ | 2u=20€ | 3u=30€ | 4u=40€",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown"
     )
