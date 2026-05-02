@@ -1042,7 +1042,7 @@ async def callback_aprobacion(update: Update, context: ContextTypes.DEFAULT_TYPE
         await query.edit_message_text("ℹ️ Esta solicitud ya fue procesada.")
         return
 
-    _, nombre, username, _ = solicitud
+    _, nombre, username, telefono, _ = solicitud
     vendedor = get_vendedor(update)
 
     if accion == "aprc":
